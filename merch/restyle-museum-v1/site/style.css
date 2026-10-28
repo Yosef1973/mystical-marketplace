@@ -1,0 +1,131 @@
+/* PELEH Museum Shop · restyle-museum-v1
+   Design language carried over from the approved PELEH books app (design-depth-v1 + design-museum-v3):
+   5 depth layers · golden-ratio rhythm 8·13·21·34·55 · sepia underdrawing · tree band · walnut medallion seals.
+   Palette: parchment / beige / gold only (no dark surfaces). mobile-first, base = 390px */
+:root{
+  --paper:#F6F1E6;--paper-deep:#EFE7D5;--parchment:#EBE0C6;
+  --gold:#B68B36;--gold-deep:#946A1F;--gold-soft:#E9CE8A;
+  --ink:#211C13;--ink-soft:#4A3F32;--walnut:#5C4030;--muted:#8A7E68;
+  --serif:'Frank Ruhl Libre','David Libre','David',serif;--sans:'IBM Plex Sans Hebrew','Heebo',sans-serif;
+  --nav-h:64px;
+}
+*{box-sizing:border-box}html{-webkit-text-size-adjust:100%;background:var(--paper);overflow-x:clip}body{overflow-x:clip}
+body{margin:0;color:var(--ink);font-family:var(--serif);line-height:1.618;font-size:17px;position:relative;isolation:isolate;
+  padding-bottom:calc(var(--nav-h) + 13px + env(safe-area-inset-bottom));
+  background:radial-gradient(120% 60% at 50% 8%,#FBF7EE 0%,transparent 60%),radial-gradient(90% 50% at 50% 105%,rgba(233,206,138,.28),transparent 70%),linear-gradient(180deg,#F7F2E7,#F1E9D7);background-attachment:fixed}
+/* LAYER 5 · faint sepia golden-ratio pattern (5%) + sfumato vignette */
+body::before{content:"";position:fixed;inset:-60px;z-index:-2;pointer-events:none;
+  background:url(museum/pattern-tile.svg) 0 0/300px 300px repeat;opacity:.05;transform:rotate(-8deg);mix-blend-mode:multiply}
+body::after{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
+  background:radial-gradient(140% 95% at 50% 45%,transparent 55%,rgba(148,106,31,.10) 100%)}
+a{color:var(--ink)}
+/* draft notice → small gilded plate instead of a dark band */
+.notice{margin:8px auto 0;width:max-content;max-width:calc(100% - 26px);text-align:center;padding:3px 13px;font-family:var(--sans);font-size:10.5px;letter-spacing:.06em;color:#5a4010;
+  border-radius:40% 60% 55% 45%/60% 50% 50% 40%;background:radial-gradient(ellipse at 50% 0,#F6E3A8,#E2C27A 60%,#C9A055);box-shadow:0 3px 8px -3px rgba(90,60,15,.35),inset 0 1px 0 rgba(255,255,255,.6)}
+/* compact sticky header · translucent parchment + gold hairline */
+header{position:sticky;top:0;z-index:5;display:flex;justify-content:center;align-items:center;min-height:52px;
+  background:linear-gradient(180deg,rgba(248,243,232,.97),rgba(245,238,224,.95));border-bottom:1px solid rgba(182,139,54,.30);box-shadow:0 1px 0 rgba(255,255,255,.8)}
+.logo{display:flex;align-items:center;gap:8px;text-decoration:none;padding:8px;color:var(--ink)}
+.logo .w{font-family:var(--serif);font-weight:700;font-size:21px;letter-spacing:.18em;text-shadow:0 1px 0 #fff}
+.logo .en{font-family:var(--sans);font-size:10px;letter-spacing:.42em;color:var(--gold-deep)}
+.logo .mk{width:21px;height:21px;border-radius:50%;background:var(--paper);box-shadow:0 0 0 1px rgba(182,139,54,.5),0 0 10px rgba(233,206,138,.9)}
+header nav{display:none}
+body.home header{display:none}
+/* LAYER 1 + 3 · tree-band logo floating over a warm glow */
+.hero{position:relative;padding:13px 16px 0;text-align:center;height:250px;overflow:hidden}
+.hero::before{content:"";position:absolute;left:50%;top:-10px;width:390px;height:300px;transform:translateX(-50%);
+  background:url(museum/underdrawing.svg) center/300px 300px no-repeat;opacity:.13;pointer-events:none}
+.hero .halo{position:absolute;left:0;right:0;top:70px;height:170px;pointer-events:none;
+  background:radial-gradient(50% 50% at 50% 50%,rgba(240,214,150,.60),rgba(233,206,138,.22) 55%,transparent 75%);filter:blur(6px)}
+.tlogo{position:relative;height:170px;margin:0 auto;max-width:390px;filter:drop-shadow(0 13px 13px rgba(148,106,31,.22)) drop-shadow(0 2px 2px rgba(92,64,48,.18))}
+.tlogo .band{position:absolute;left:0;right:0;top:0;width:100%;height:178px;object-fit:contain}
+.tlogo .word{position:absolute;inset-inline:0;top:44px;font-weight:700;font-size:34px;letter-spacing:.18em;text-shadow:0 1px 0 #fff;line-height:1.2}
+.tlogo .mark{position:absolute;left:50%;top:84px;width:22px;height:22px;transform:translateX(-50%);background:var(--paper);border-radius:50%;box-shadow:0 0 0 1px rgba(182,139,54,.5),0 0 10px rgba(233,206,138,.9)}
+.tlogo .mark img{width:100%;height:100%;display:block}
+.tlogo .sub{position:absolute;inset-inline:0;top:121px;font-family:var(--sans);font-size:11px;letter-spacing:.42em;color:var(--gold-deep)}
+.hero h1{position:relative;margin:0;font-weight:500;font-size:18px;color:var(--ink-soft);letter-spacing:.02em;
+  text-shadow:0 1px 0 rgba(255,255,255,.9),0 -1px 0 rgba(148,106,31,.12)}
+/* LAYER 2 · translucent parchment scroll sheet */
+.sheet{position:relative;z-index:1;margin-top:0;border-radius:28px 28px 0 0;min-height:60vh;padding:21px 0 0;
+  background:linear-gradient(180deg,rgba(251,248,241,.82),rgba(248,243,233,.70) 40%,rgba(246,241,230,.64));
+  border-top:1px solid rgba(182,139,54,.35);box-shadow:0 -1px 0 rgba(255,255,255,.8) inset,0 -8px 21px -13px rgba(148,106,31,.35)}
+body:not(.home) .sheet{border-radius:0;border-top:0;box-shadow:none;background:none;min-height:0;padding-top:0}
+.kicker{font-family:var(--sans);font-size:11px;letter-spacing:.32em;color:var(--gold-deep);text-align:center;margin:0 0 13px}
+/* seals · חותמות (walnut medallion) */
+.seal{display:inline-flex;align-items:center;justify-content:center;flex:none;width:21px;height:21px;border-radius:50%;margin-inline-end:6px;vertical-align:-5px;
+  font-style:normal;font-family:var(--serif);font-weight:700;font-size:12px;line-height:1;color:#FBF1D6;
+  background:radial-gradient(circle at 35% 30%,#B8875A,#7A5638 55%,#5C4030);
+  box-shadow:0 0 0 1.5px #E3C27A,0 0 0 2.5px rgba(148,106,31,.35),0 2px 4px rgba(92,64,48,.30),inset 0 1px 0 rgba(255,255,255,.25)}
+.seal.big{width:55px;height:55px;font-size:24px;margin:0 auto 8px;display:flex;
+  background:repeating-radial-gradient(circle at 50% 50%,rgba(255,240,200,.08) 0 2px,transparent 2px 5px),radial-gradient(circle at 35% 30%,#B8875A,#7A5638 55%,#5C4030);
+  box-shadow:0 0 0 3px #E3C27A,0 0 0 5px #F8F2E4,0 0 0 6px rgba(182,139,54,.45),0 8px 13px -4px rgba(92,64,48,.35),inset 0 1px 0 rgba(255,255,255,.3)}
+.seals{display:flex;justify-content:center;gap:21px;padding:0 13px;margin-bottom:21px}
+.seals span{display:flex;flex-direction:column;align-items:center;width:89px;font-family:var(--sans);font-size:11.5px;color:var(--ink-soft);text-align:center;line-height:1.3}
+.rule{display:flex;align-items:center;gap:13px;justify-content:center;padding:0 21px}
+.rule::before,.rule::after{content:"";height:1px;flex:1;background:linear-gradient(90deg,transparent,rgba(182,139,54,.6),transparent)}
+.rule img{width:21px;height:21px}
+/* display cases */
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:13px;padding:21px 13px 34px}
+.card{display:block;text-decoration:none;color:inherit;border-radius:16px;overflow:hidden;background:rgba(255,255,255,.55);
+  box-shadow:0 0 0 1px rgba(182,139,54,.40),0 0 0 4px rgba(248,242,228,.9),0 0 0 5px rgba(182,139,54,.22),0 13px 21px -10px rgba(92,64,48,.28)}
+.card .im{aspect-ratio:1/1;display:flex;align-items:center;justify-content:center;position:relative;
+  background:radial-gradient(60% 70% at 50% 45%,rgba(251,246,234,.0),rgba(214,190,140,.45) 100%),linear-gradient(160deg,#F3E8CF,#E6D3A8)}
+.card img{width:100%;height:100%;object-fit:cover;display:block}
+.card .t{padding:8px 13px 13px;font-size:15px;line-height:1.4;position:relative}
+.card .t::before{content:"";display:block;height:1px;margin:0 0 8px;background:linear-gradient(90deg,transparent,rgba(182,139,54,.55),transparent)}
+.brand{color:var(--gold-deep);font-family:var(--sans);font-size:11.5px;letter-spacing:.04em;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.price{font-weight:600;color:var(--gold-deep)}
+.ph{color:var(--gold-deep);font-size:14px;text-align:center;opacity:.8}
+/* product */
+.prod{padding:13px 0 21px}
+.pimg{margin:0 13px;border-radius:16px;overflow:hidden;background:linear-gradient(160deg,#F3E8CF,#E6D3A8);
+  box-shadow:0 0 0 1px rgba(182,139,54,.45),0 0 0 5px #F8F2E4,0 0 0 6px rgba(182,139,54,.30),0 13px 21px -8px rgba(92,64,48,.28)}
+.prod .pimg img{width:100%;display:block}
+.prod .info{padding:21px 21px 13px}
+.prod h1{font-size:34px;font-weight:700;line-height:1.2;margin:5px 0 13px;text-shadow:0 1px 0 rgba(255,255,255,.9),0 -1px 0 rgba(148,106,31,.12)}
+.prod .info p{color:var(--ink-soft)}
+/* seed buttons (gold) */
+button,.btn{min-height:50px;min-width:44px;border:0;border-radius:99px;padding:0 21px;font-size:17px;font-family:var(--serif);cursor:pointer;text-decoration:none;
+  display:inline-flex;align-items:center;justify-content:center;color:#2a1d08;
+  background:radial-gradient(120% 140% at 50% 0%,#F6DFA1,#D9B464 55%,#C29540);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.7),inset 0 -2px 0 rgba(148,106,31,.35),0 4px 8px rgba(148,106,31,.30)}
+.sizes{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 13px}
+.sizes label{position:relative}.sizes input{position:absolute;opacity:0}
+.sizes span{display:flex;align-items:center;justify-content:center;min-width:55px;min-height:48px;border-radius:99px;color:var(--gold-deep);
+  background:linear-gradient(180deg,#FBF6EA,#F1E7D0);box-shadow:inset 0 0 0 1px rgba(182,139,54,.55),inset 0 1px 0 #fff,0 2px 4px rgba(92,64,48,.12)}
+.sizes input:checked+span{color:#2a1d08;font-weight:600;background:radial-gradient(120% 140% at 50% 0%,#F6DFA1,#D9B464 55%,#C29540);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.7),inset 0 -2px 0 rgba(148,106,31,.35),0 0 0 2px #F8F2E4,0 0 0 3px rgba(182,139,54,.6),0 4px 8px rgba(148,106,31,.30)}
+.muted{color:var(--muted);font-family:var(--sans);font-size:13px}
+/* LAYER 4 · raised stone-parchment strip (buy / checkout) */
+.buybar,.cartbar{position:fixed;z-index:6;left:12px;right:12px;bottom:calc(var(--nav-h) + 8px + env(safe-area-inset-bottom));
+  display:flex;gap:13px;align-items:center;justify-content:space-between;padding:13px 13px 13px 21px;border-radius:22px;
+  background:url(museum/stone-noise.svg) 0 0/220px 220px,url(museum/stone-veins.svg) 30% 40%/600px 600px,linear-gradient(178deg,#F1E6CC 0%,#E9DAB6 55%,#E0CDA2 100%);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.85),inset 0 -3px 0 rgba(148,106,31,.18),inset 0 0 0 1px rgba(182,139,54,.35),0 13px 21px -6px rgba(92,64,48,.30),0 3px 5px rgba(92,64,48,.16)}
+.buybar::before,.cartbar::before{content:"";position:absolute;inset:5px;border-radius:17px;border:1px dashed rgba(148,106,31,.22);pointer-events:none}
+.buybar button,.cartbar .btn{flex:1.618}
+.buybar .price,.cartbar b{font-family:var(--serif);color:var(--ink);padding-inline-start:8px}
+.has-buybar{padding-bottom:calc(var(--nav-h) + 110px + env(safe-area-inset-bottom))}
+/* bottom nav · light parchment, gold active pill */
+.bnav{position:fixed;inset-inline:0;bottom:0;z-index:7;display:flex;justify-content:space-around;padding-bottom:env(safe-area-inset-bottom);
+  background:linear-gradient(180deg,#F8F3E8,#F3ECDD);border-top:1px solid rgba(182,139,54,.22);box-shadow:0 -6px 13px -8px rgba(148,106,31,.25)}
+.bnav a{flex:1;min-height:var(--nav-h);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;color:var(--ink-soft);text-decoration:none;font-family:var(--sans);font-size:12px}
+.bnav a b{font-size:17px;font-weight:normal;color:var(--gold);width:34px;height:28px;display:flex;align-items:center;justify-content:center;border-radius:9px}
+.bnav a.on{color:var(--gold-deep);font-weight:600}.bnav a.on b{background:rgba(233,206,138,.45);box-shadow:inset 0 0 0 1px rgba(182,139,54,.25)}
+/* cart / checkout */
+main.box{padding:21px}
+main.box h1{font-size:34px;line-height:1.2;margin:8px 0 21px;text-shadow:0 1px 0 rgba(255,255,255,.9),0 -1px 0 rgba(148,106,31,.12)}
+#cart{display:flex;flex-direction:column;gap:13px;margin-bottom:21px}
+.line{display:flex;gap:13px;align-items:center;padding:13px;border-radius:16px;background:rgba(255,255,255,.55);border:1px solid rgba(182,139,54,.25);box-shadow:0 8px 13px -10px rgba(92,64,48,.3)}
+.line .n{flex:1;line-height:1.4}.line small{font-family:var(--sans);color:var(--muted);font-size:12px}
+.qty{display:flex;align-items:center;gap:6px}
+.qty button{min-width:44px;min-height:44px;padding:0;color:var(--gold-deep);background:linear-gradient(180deg,#FBF6EA,#F1E7D0);box-shadow:inset 0 0 0 1px rgba(182,139,54,.55),inset 0 1px 0 #fff,0 2px 4px rgba(92,64,48,.12)}
+main.box>p{line-height:1.9}
+.plaque{font-size:18px;padding:21px;border-radius:16px;background:rgba(255,255,255,.55);line-height:1.618;
+  box-shadow:0 0 0 1px rgba(182,139,54,.45),0 0 0 5px #F8F2E4,0 0 0 6px rgba(182,139,54,.30),0 13px 21px -8px rgba(92,64,48,.22)}
+/* footer · tree band */
+footer{text-align:center;padding:13px 16px 21px;color:var(--muted);font-family:var(--sans);font-size:12px;letter-spacing:.04em}
+footer .fband{display:block;width:144px;height:auto;margin:0 auto 5px;opacity:.6}
+@media(min-width:700px){.grid{grid-template-columns:repeat(3,1fr);gap:21px;padding:34px 5%}.prod{display:grid;grid-template-columns:1fr 1fr;gap:34px;padding:34px 5%}}
+@media(min-width:1024px){.grid{grid-template-columns:repeat(4,1fr)}body{padding-bottom:0}.bnav{display:none}body.home header{display:flex}
+header{justify-content:space-between;padding:0 5%}header nav{display:flex;gap:8px;align-items:center}header nav a{min-height:44px;display:flex;align-items:center;padding:0 10px;text-decoration:none}
+.buybar,.cartbar{position:static;background:none;box-shadow:none;padding:13px 0}.buybar::before,.cartbar::before{display:none}.has-buybar{padding-bottom:0}}

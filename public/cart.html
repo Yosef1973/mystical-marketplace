@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>סל קניות · יוסף חלפה</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Frank+Ruhl+Libre:wght@400;500;700&family=IBM+Plex+Sans+Hebrew:wght@400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+    <header>
+        <a class="logo" href="/">
+            <span class="w">פלא</span>
+            <div class="mk"></div>
+            <span class="en">YOSEF KHALFA</span>
+        </a>
+        <nav>
+            <a href="/">גלריה</a>
+            <a href="/cart.html">סל (<span id="cart-count">0</span>)</a>
+        </nav>
+    </header>
+
+    <main>
+        <div class="hero">
+            <h1>סל הקניות שלך</h1>
+        </div>
+        
+        <div id="cart-container">
+            <!-- Cart will be loaded here -->
+        </div>
+    </main>
+
+    <script>
+        const token = localStorage.getItem('token');
+        let cart = [];
+        
+        async function loadCart() {
+            if (!token) {
+                document.getElementById('cart-container').innerHTML = `
+                    <p class="text-center">אנא <a href="/" style="color: var(--gold-deep); text-decoration: underline;">התחבר</a> כדי לראות את הסל שלך</p>
+                `;
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/cart', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                cart = await response.json();
+                renderCart();
+            } catch (error) {
+                console.error('Failed to load cart:', error);
+                document.getElementById('cart-container').innerHTML = '<p class="text-center">שגיאה בטעינת הסל</p>';
+            }
+        }
+        
+        function renderCart() {
+            const container = document.getElementById('cart-container');
+            
+            if (cart.length === 0) {
+                container.innerHTML = '<p class="text-center">הסל שלך ריק</p>';
+                document.getElementById('cart-count').textContent = '0';
+                return;
+            }
+            
+            const total = cart.reduce((sum, item) => {
+                const price = item.license_type === 'commercial' ? item.price * 3 : item.price;
+                return sum + price;
+            }, 0);
+            
+            container.innerHTML = `
+                <div class="cart-items">
+                    ${cart.map(item => {
+                        const sealLetter = item.category === 'עץ הדעת' ? 'פ' : 
+                                         item.category === 'עץ החיים' ? 'ש' : 'ג';
+                        const collectionName = item.category === 'עץ הדעת' ? 'PELEH' :
+                                              item.category === 'עץ החיים' ? 'שני עצים בלב' : 'גן המבוכה';
+                        const price = item.license_type === 'commercial' ? item.price * 3 : item.price;
+                        const licenseLabel = item.license_type === 'personal' ? 'רישיון אישי' : 'רישיון מסחרי';
+                        
+                        return `
+                            <div class="cart-item">
+                                <div class="cart-item-image">
+                                    <img src="${item.image}" alt="${item.title}">
+                                </div>
+                                <div class="cart-item-info">
+                                    <div class="cart-item-title">${item.title}</div>
+                                    <div class="cart-item-collection">
+                                        <span class="seal">${sealLetter}</span>
+                                        ${collectionName}
+                                    </div>
+                                    <div class="cart-item-license">${licenseLabel}</div>
+                                    <div class="cart-item-actions">
+                                        <select onchange="updateLicense(${item.cart_id}, this.value)" class="btn-secondary">
+                                            <option value="personal" ${item.license_type === 'personal' ? 'selected' : ''}>החלף לרישיון אישי</option>
+                                            <option value="commercial" ${item.license_type === 'commercial' ? 'selected' : ''}>החלף לרישיון מסחרי</option>
+                                        </select>
+                                        <button class="btn-secondary" onclick="removeFromCart(${item.cart_id})">הסר</button>
+                                    </div>
+                                </div>
+                                <div class="cart-item-price">$${(price / 100).toFixed(0)}</div>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+                
+                <div class="cart-summary">
+                    <div class="cart-summary-line">
+                        <span>סה״כ פריטים</span>
+                        <span>${cart.length}</span>
+                    </div>
+                    <div class="cart-summary-total">
+                        <span>סה״כ לתשלום</span>
+                        <span>$${(total / 100).toFixed(0)}</span>
+                    </div>
+                    <button class="btn-primary" style="width: 100%; margin-top: 21px; padding: 13px 21px; font-size: 18px;" onclick="goToCheckout()">
+                        המשך לתשלום
+                    </button>
+                </div>
+                
+                <div class="notice">
+                    תשלום דמה בלבד · אין חיוב אמיתי
+                </div>
+            `;
+            
+            document.getElementById('cart-count').textContent = cart.length;
+        }
+        
+        async function updateLicense(cartId, licenseType) {
+            try {
+                await fetch(`/api/cart/${cartId}/license`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ licenseType })
+                });
+                
+                await loadCart();
+            } catch (error) {
+                alert('שגיאה בעדכון הרישיון: ' + error.message);
+            }
+        }
+        
+        async function removeFromCart(cartId) {
+            if (!confirm('האם אתה בטוח שברצונך להסיר פריט זה?')) return;
+            
+            try {
+                await fetch(`/api/cart/${cartId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                await loadCart();
+            } catch (error) {
+                alert('שגיאה בהסרת הפריט: ' + error.message);
+            }
+        }
+        
+        function goToCheckout() {
+            window.location.href = '/checkout.html';
+        }
+        
+        // Initialize
+        loadCart();
+    </script>
+</body>
+</html>

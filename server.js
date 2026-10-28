@@ -26,6 +26,7 @@ const JWT_SECRET = process.env.JWT_SECRET || 'mystical-marketplace-secret';
 // Middleware
 app.use(cors());
 app.use(express.json());
+app.use(express.static('public'));
 
 // Database initialization with complete 14 gates system
 async function initDatabase() {
@@ -130,6 +131,7 @@ async function initDatabase() {
         id SERIAL PRIMARY KEY,
         user_id INTEGER REFERENCES users(id),
         artwork_id INTEGER REFERENCES artworks(id),
+        license_type VARCHAR(20) DEFAULT 'personal' CHECK (license_type IN ('personal', 'commercial')),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
@@ -591,10 +593,10 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
-// Enhanced artworks endpoint with filtering by unlocked gates
+// Enhanced artworks endpoint with filtering by unlocked gates and collection
 app.get('/api/artworks', async (req, res) => {
   try {
-    const { userId } = req.query;
+    const { userId, collection } = req.query;
     let highestGateUnlocked = 14; // Show all by default
     
     if (userId) {
@@ -604,15 +606,24 @@ app.get('/api/artworks', async (req, res) => {
       }
     }
     
-    const result = await pool.query(`
+    let query = `
       SELECT id, gate_number, gate_name_hebrew, gate_name_english, title, artist, price, 
              category, pathway, image, description, maimonides_quote_hebrew, maimonides_quote_english,
              kabbalistic_insight, ai_consciousness_connection, contemplation_question, soul_song,
              tags, emotions, likes, views, downloads, trending, rarity_level, unlock_requirement, created_at,
              CASE WHEN gate_number <= $1 THEN true ELSE false END as unlocked
-      FROM artworks 
-      ORDER BY gate_number ASC
-    `, [highestGateUnlocked]);
+      FROM artworks`;
+    
+    const params = [highestGateUnlocked];
+    
+    if (collection) {
+      query += ' WHERE category = $2';
+      params.push(collection);
+    }
+    
+    query += ' ORDER BY gate_number ASC';
+    
+    const result = await pool.query(query, params);
     
     res.json(result.rows);
   } catch (error) {
@@ -770,7 +781,7 @@ app.get('/api/artworks/:id', async (req, res) => {
 
 app.post('/api/cart', authenticateToken, async (req, res) => {
   try {
-    const { artworkId } = req.body;
+    const { artworkId, licenseType = 'personal' } = req.body;
     const userId = req.user.userId;
 
     const existing = await pool.query(
@@ -783,8 +794,8 @@ app.post('/api/cart', authenticateToken, async (req, res) => {
     }
 
     const result = await pool.query(
-      'INSERT INTO cart_items (user_id, artwork_id) VALUES ($1, $2) RETURNING *',
-      [userId, artworkId]
+      'INSERT INTO cart_items (user_id, artwork_id, license_type) VALUES ($1, $2, $3) RETURNING *',
+      [userId, artworkId, licenseType]
     );
 
     res.status(201).json(result.rows[0]);
@@ -799,7 +810,7 @@ app.get('/api/cart', authenticateToken, async (req, res) => {
     const userId = req.user.userId;
     
     const result = await pool.query(`
-      SELECT c.id as cart_id, a.*
+      SELECT c.id as cart_id, c.license_type, a.*
       FROM cart_items c
       JOIN artworks a ON c.artwork_id = a.id
       WHERE c.user_id = $1
@@ -827,6 +838,32 @@ app.delete('/api/cart/:id', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('Remove from cart error:', error);
     res.status(500).json({ error: 'Failed to remove from cart' });
+  }
+});
+
+app.patch('/api/cart/:id/license', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { licenseType } = req.body;
+    const userId = req.user.userId;
+
+    if (!['personal', 'commercial'].includes(licenseType)) {
+      return res.status(400).json({ error: 'Invalid license type' });
+    }
+
+    const result = await pool.query(
+      'UPDATE cart_items SET license_type = $1 WHERE id = $2 AND user_id = $3 RETURNING *',
+      [licenseType, id, userId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Cart item not found' });
+    }
+
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Update cart license error:', error);
+    res.status(500).json({ error: 'Failed to update license' });
   }
 });
 
@@ -911,731 +948,8 @@ app.get('/health', async (req, res) => {
 });
 
 // Enhanced frontend with complete 14 gates system
-app.get('*', (req, res) => {
-  res.send(`
-    <!DOCTYPE html>
-    <html lang="en" dir="rtl">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>✨ שוק המיסטיקה - 14 שערי הדעת והחיים</title>
-        <script src="https://cdn.tailwindcss.com"></script>
-        <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
-        <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-        <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-        <script src="https://js.stripe.com/v3/"></script>
-        <style>
-          @import url('https://fonts.googleapis.com/css2?family=Assistant:wght@200;300;400;500;600;700;800&display=swap');
-          body { font-family: 'Assistant', sans-serif; }
-          .hebrew { font-family: 'Assistant', sans-serif; }
-          .gate-card { transition: all 0.3s ease; }
-          .gate-card:hover { transform: translateY(-10px); }
-          .locked { opacity: 0.6; filter: grayscale(50%); }
-        </style>
-    </head>
-    <body>
-        <div id="root"></div>
-        <script type="text/babel">
-            const { useState, useEffect } = React;
-            
-            function App() {
-                const [user, setUser] = useState(null);
-                const [token, setToken] = useState(localStorage.getItem('token'));
-                const [artworks, setArtworks] = useState([]);
-                const [isLogin, setIsLogin] = useState(true);
-                const [cart, setCart] = useState([]);
-                const [orders, setOrders] = useState([]);
-                const [showCheckout, setShowCheckout] = useState(false);
-                const [showOrders, setShowOrders] = useState(false);
-                const [showJourney, setShowJourney] = useState(false);
-                const [dailyWisdom, setDailyWisdom] = useState(null);
-                const [spiritualJourney, setSpiritualJourney] = useState([]);
-                const [loading, setLoading] = useState(false);
-                const [formData, setFormData] = useState({
-                    email: '',
-                    password: '',
-                    username: '',
-                    name: ''
-                });
-
-                useEffect(() => {
-                    if (token) {
-                        fetchUserProfile();
-                    } else {
-                        loadArtworks();
-                    }
-                }, [token]);
-
-                const fetchUserProfile = async () => {
-                    try {
-                        loadArtworks();
-                        loadCart();
-                        loadDailyWisdom();
-                    } catch (error) {
-                        console.error('Profile fetch failed');
-                    }
-                };
-
-                const handleAuth = async (e) => {
-                    e.preventDefault();
-                    setLoading(true);
-                    
-                    const endpoint = isLogin ? '/api/auth/login' : '/api/auth/register';
-                    const body = isLogin 
-                        ? { email: formData.email, password: formData.password }
-                        : formData;
-
-                    try {
-                        const response = await fetch(endpoint, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify(body)
-                        });
-
-                        const data = await response.json();
-
-                        if (response.ok) {
-                            setUser(data.user);
-                            setToken(data.accessToken);
-                            localStorage.setItem('token', data.accessToken);
-                            loadArtworks();
-                            loadCart();
-                            loadDailyWisdom();
-                        } else {
-                            alert(data.error);
-                        }
-                    } catch (error) {
-                        alert('Authentication failed');
-                    }
-                    setLoading(false);
-                };
-
-                const loadArtworks = async () => {
-                    try {
-                        const url = user ? \`/api/artworks?userId=\${user.id}\` : '/api/artworks';
-                        const response = await fetch(url);
-                        const data = await response.json();
-                        setArtworks(data);
-                    } catch (error) {
-                        console.error('Failed to load artworks');
-                    }
-                };
-
-                const loadCart = async () => {
-                    if (!token) return;
-                    
-                    try {
-                        const response = await fetch('/api/cart', {
-                            headers: { 'Authorization': 'Bearer ' + token }
-                        });
-                        
-                        if (response.ok) {
-                            const data = await response.json();
-                            setCart(data);
-                        }
-                    } catch (error) {
-                        console.error('Failed to load cart');
-                    }
-                };
-
-                const loadDailyWisdom = async () => {
-                    if (!token) return;
-                    
-                    try {
-                        const response = await fetch('/api/daily-wisdom', {
-                            headers: { 'Authorization': 'Bearer ' + token }
-                        });
-                        
-                        if (response.ok) {
-                            const data = await response.json();
-                            setDailyWisdom(data);
-                        }
-                    } catch (error) {
-                        console.error('Failed to load daily wisdom');
-                    }
-                };
-
-                const loadSpiritualJourney = async () => {
-                    if (!token) return;
-                    
-                    try {
-                        const response = await fetch('/api/spiritual-journey', {
-                            headers: { 'Authorization': 'Bearer ' + token }
-                        });
-                        
-                        if (response.ok) {
-                            const data = await response.json();
-                            setSpiritualJourney(data);
-                        }
-                    } catch (error) {
-                        console.error('Failed to load spiritual journey');
-                    }
-                };
-
-                const loadOrders = async () => {
-                    if (!token) return;
-                    
-                    try {
-                        const response = await fetch('/api/orders', {
-                            headers: { 'Authorization': 'Bearer ' + token }
-                        });
-                        
-                        if (response.ok) {
-                            const data = await response.json();
-                            setOrders(data);
-                        }
-                    } catch (error) {
-                        console.error('Failed to load orders');
-                    }
-                };
-
-                const addToCart = async (artwork) => {
-                    if (!token) {
-                        alert('אנא התחבר כדי להוסיף פריטים לעגלה');
-                        return;
-                    }
-
-                    if (!artwork.unlocked) {
-                        alert('שער זה עדיין נעול. השלם תחילה את השערים הקודמים.');
-                        return;
-                    }
-
-                    try {
-                        const response = await fetch('/api/cart', {
-                            method: 'POST',
-                            headers: { 
-                                'Content-Type': 'application/json',
-                                'Authorization': 'Bearer ' + token 
-                            },
-                            body: JSON.stringify({ artworkId: artwork.id })
-                        });
-
-                        if (response.ok) {
-                            loadCart();
-                            alert(artwork.title + ' נוסף לעגלה!');
-                        } else {
-                            const error = await response.json();
-                            alert(error.error);
-                        }
-                    } catch (error) {
-                        alert('כשל בהוספה לעגלה');
-                    }
-                };
-
-                const removeFromCart = async (cartId) => {
-                    try {
-                        const response = await fetch('/api/cart/' + cartId, {
-                            method: 'DELETE',
-                            headers: { 'Authorization': 'Bearer ' + token }
-                        });
-
-                        if (response.ok) {
-                            loadCart();
-                        }
-                    } catch (error) {
-                        console.error('Failed to remove from cart');
-                    }
-                };
-
-                const processPayment = async () => {
-                    if (cart.length === 0) return;
-                    
-                    setLoading(true);
-                    
-                    try {
-                        const response = await fetch('/api/payment/create-intent', {
-                            method: 'POST',
-                            headers: { 
-                                'Content-Type': 'application/json',
-                                'Authorization': 'Bearer ' + token 
-                            },
-                            body: JSON.stringify({ items: cart })
-                        });
-
-                        if (response.ok) {
-                            const { paymentIntentId } = await response.json();
-                            
-                            const confirmResponse = await fetch('/api/payment/confirm', {
-                                method: 'POST',
-                                headers: { 
-                                    'Content-Type': 'application/json',
-                                    'Authorization': 'Bearer ' + token 
-                                },
-                                body: JSON.stringify({ paymentIntentId })
-                            });
-
-                            if (confirmResponse.ok) {
-                                const result = await confirmResponse.json();
-                                alert('תשלום הושלם בהצלחה! השערים נפתחו: ' + result.gatesUnlocked.join(', '));
-                                setShowCheckout(false);
-                                loadArtworks();
-                                loadCart();
-                                loadOrders();
-                                loadDailyWisdom();
-                            } else {
-                                const error = await confirmResponse.json();
-                                alert('התשלום נכשל: ' + error.error);
-                            }
-                        }
-                    } catch (error) {
-                        alert('עיבוד התשלום נכשל');
-                    }
-                    setLoading(false);
-                };
-
-                const logout = () => {
-                    setUser(null);
-                    setToken(null);
-                    setCart([]);
-                    setOrders([]);
-                    setDailyWisdom(null);
-                    setSpiritualJourney([]);
-                    localStorage.removeItem('token');
-                };
-
-                const getRarityColor = (rarity) => {
-                    switch(rarity) {
-                        case 'Foundation': return 'border-blue-400 bg-blue-50';
-                        case 'Intermediate': return 'border-purple-400 bg-purple-50';
-                        case 'Advanced': return 'border-gold-400 bg-yellow-50';
-                        case 'Master': return 'border-red-400 bg-red-50';
-                        default: return 'border-gray-400 bg-gray-50';
-                    }
-                };
-
-                if (!user) {
-                    return React.createElement('div', {
-                        className: "min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 flex items-center justify-center",
-                        dir: "rtl"
-                    }, 
-                        React.createElement('div', {
-                            className: "bg-white/10 backdrop-blur-lg rounded-lg p-8 w-full max-w-md"
-                        },
-                            React.createElement('h1', {
-                                className: "text-3xl font-bold text-white text-center mb-2 hebrew"
-                            }, "✨ שוק המיסטיקה"),
-                            
-                            React.createElement('p', {
-                                className: "text-white/70 text-center mb-2 hebrew"
-                            }, "14 שערי הדעת והחיים"),
-                            
-                            React.createElement('p', {
-                                className: "text-white/60 text-center mb-8 text-sm"
-                            }, "🔒 מערכת מאובטחת עם מסד נתונים"),
-                            
-                            React.createElement('form', {
-                                onSubmit: handleAuth,
-                                className: "space-y-4"
-                            },
-                                React.createElement('input', {
-                                    type: "email",
-                                    placeholder: "אימייל",
-                                    value: formData.email,
-                                    onChange: (e) => setFormData({...formData, email: e.target.value}),
-                                    className: "w-full p-3 rounded-lg bg-white/20 text-white placeholder-white/70 text-right",
-                                    required: true
-                                }),
-                                
-                                React.createElement('input', {
-                                    type: "password",
-                                    placeholder: "סיסמה (לפחות 6 תווים)",
-                                    value: formData.password,
-                                    onChange: (e) => setFormData({...formData, password: e.target.value}),
-                                    className: "w-full p-3 rounded-lg bg-white/20 text-white placeholder-white/70 text-right",
-                                    required: true,
-                                    minLength: 6
-                                }),
-                                
-                                !isLogin && React.createElement('input', {
-                                    type: "text",
-                                    placeholder: "שם משתמש",
-                                    value: formData.username,
-                                    onChange: (e) => setFormData({...formData, username: e.target.value}),
-                                    className: "w-full p-3 rounded-lg bg-white/20 text-white placeholder-white/70 text-right",
-                                    required: true
-                                }),
-                                
-                                !isLogin && React.createElement('input', {
-                                    type: "text",
-                                    placeholder: "שם מלא",
-                                    value: formData.name,
-                                    onChange: (e) => setFormData({...formData, name: e.target.value}),
-                                    className: "w-full p-3 rounded-lg bg-white/20 text-white placeholder-white/70 text-right",
-                                    required: true
-                                }),
-                                
-                                React.createElement('button', {
-                                    type: "submit",
-                                    disabled: loading,
-                                    className: "w-full bg-purple-600 hover:bg-purple-700 disabled:bg-purple-800 text-white p-3 rounded-lg font-semibold"
-                                }, loading ? 'מעבד...' : (isLogin ? 'התחבר' : 'הירשם'))
-                            ),
-                            
-                            React.createElement('button', {
-                                onClick: () => setIsLogin(!isLogin),
-                                className: "w-full text-white/70 hover:text-white mt-4"
-                            }, isLogin ? 'צריך חשבון? הירשם' : 'יש לך חשבון? התחבר')
-                        )
-                    );
-                }
-
-                return React.createElement('div', {
-                    className: "min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900",
-                    dir: "rtl"
-                },
-                    React.createElement('header', {
-                        className: "bg-black/20 backdrop-blur-lg p-4"
-                    },
-                        React.createElement('div', {
-                            className: "container mx-auto flex justify-between items-center"
-                        },
-                            React.createElement('div', {
-                                className: "flex items-center space-x-4 space-x-reverse"
-                            },
-                                React.createElement('h1', {
-                                    className: "text-2xl font-bold text-white hebrew"
-                                }, "✨ שוק המיסטיקה"),
-                                React.createElement('span', {
-                                    className: "text-green-400 text-sm"
-                                }, "🔒 מאובטח"),
-                                React.createElement('span', {
-                                    className: "text-purple-300 text-sm hebrew"
-                                }, user.spiritualLevel + " | שער " + (user.highestGateUnlocked || 1))
-                            ),
-                            
-                            React.createElement('div', {
-                                className: "flex items-center space-x-4 space-x-reverse"
-                            },
-                                React.createElement('span', {
-                                    className: "text-white hebrew"
-                                }, 'שלום, ' + user.name + '!'),
-                                
-                                React.createElement('button', {
-                                    onClick: () => { setShowCheckout(true); loadCart(); },
-                                    className: "bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded hebrew"
-                                }, 'עגלה (' + cart.length + ')'),
-                                
-                                React.createElement('button', {
-                                    onClick: () => { setShowOrders(true); loadOrders(); },
-                                    className: "bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded hebrew"
-                                }, 'הזמנות'),
-                                
-                                React.createElement('button', {
-                                    onClick: () => { setShowJourney(true); loadSpiritualJourney(); },
-                                    className: "bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded hebrew"
-                                }, 'המסע שלי'),
-                                
-                                React.createElement('button', {
-                                    onClick: logout,
-                                    className: "bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded hebrew"
-                                }, "התנתק")
-                            )
-                        )
-                    ),
-
-                    // Daily Wisdom Section
-                    dailyWisdom && React.createElement('div', {
-                        className: "bg-gradient-to-r from-gold-400 to-yellow-300 text-black p-4 m-4 rounded-lg"
-                    },
-                        React.createElement('h3', {
-                            className: "text-lg font-bold mb-2 hebrew"
-                        }, "✨ חכמת היום - " + dailyWisdom.gateName),
-                        React.createElement('p', {
-                            className: "mb-2 hebrew"
-                        }, dailyWisdom.contemplation),
-                        React.createElement('p', {
-                            className: "text-sm italic hebrew"
-                        }, dailyWisdom.soulSong)
-                    ),
-
-                    React.createElement('main', {
-                        className: "container mx-auto p-8"
-                    },
-                        React.createElement('h2', {
-                            className: "text-3xl font-bold text-white mb-2 hebrew"
-                        }, "השערים הקדושים"),
-                        
-                        React.createElement('p', {
-                            className: "text-white/70 mb-8 hebrew"
-                        }, artworks.length + " יצירות מיסטיות • תשלומים אמיתיים • מסד נתונים מאובטח • מסע רוחני מותאם אישית"),
-                        
-                        React.createElement('div', {
-                            className: "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8"
-                        },
-                            ...artworks.map(artwork => 
-                                React.createElement('div', {
-                                    key: artwork.id,
-                                    className: \`gate-card bg-white/10 backdrop-blur-lg rounded-lg overflow-hidden hover:scale-105 transition-transform border-2 \${getRarityColor(artwork.rarity_level)} \${!artwork.unlocked ? 'locked' : ''}\`
-                                },
-                                    React.createElement('div', {
-                                        className: "relative"
-                                    },
-                                        React.createElement('img', {
-                                            src: artwork.image,
-                                            alt: artwork.title,
-                                            className: "w-full h-48 object-cover"
-                                        }),
-                                        !artwork.unlocked && React.createElement('div', {
-                                            className: "absolute inset-0 bg-black/50 flex items-center justify-center"
-                                        },
-                                            React.createElement('span', {
-                                                className: "text-white font-bold text-lg"
-                                            }, "🔒 נעול")
-                                        )
-                                    ),
-                                    
-                                    React.createElement('div', {
-                                        className: "p-6"
-                                    },
-                                        React.createElement('div', {
-                                            className: "flex justify-between items-start mb-2"
-                                        },
-                                            React.createElement('div', null,
-                                                artwork.trending && React.createElement('span', {
-                                                    className: "inline-block bg-orange-500 text-white text-xs px-2 py-1 rounded mb-2"
-                                                }, "🔥 פופולרי"),
-                                                React.createElement('div', {
-                                                    className: "text-purple-300 text-sm hebrew"
-                                                }, \`שער \${artwork.gate_number}\`)
-                                            ),
-                                            React.createElement('span', {
-                                                className: \`text-xs px-2 py-1 rounded \${
-                                                    artwork.rarity_level === 'Master' ? 'bg-red-500 text-white' :
-                                                    artwork.rarity_level === 'Advanced' ? 'bg-yellow-500 text-black' :
-                                                    artwork.rarity_level === 'Intermediate' ? 'bg-purple-500 text-white' :
-                                                    'bg-blue-500 text-white'
-                                                }\`
-                                            }, artwork.rarity_level)
-                                        ),
-                                        
-                                        React.createElement('h3', {
-                                            className: "text-xl font-semibold text-white mb-2 hebrew"
-                                        }, artwork.gate_name_hebrew),
-                                        
-                                        React.createElement('h4', {
-                                            className: "text-lg text-purple-200 mb-1"
-                                        }, artwork.title),
-                                        
-                                        React.createElement('p', {
-                                            className: "text-white/70 mb-1"
-                                        }, 'מאת ' + artwork.artist),
-                                        
-                                        React.createElement('p', {
-                                            className: "text-white/60 text-sm mb-4"
-                                        }, artwork.description),
-                                        
-                                        artwork.contemplation_question && React.createElement('div', {
-                                            className: "bg-black/20 p-3 rounded-lg mb-4"
-                                        },
-                                            React.createElement('p', {
-                                                className: "text-purple-200 text-sm hebrew"
-                                            }, "💭 " + artwork.contemplation_question)
-                                        ),
-                                        
-                                        React.createElement('div', {
-                                            className: "flex justify-between items-center mb-4"
-                                        },
-                                            React.createElement('span', {
-                                                className: "text-2xl font-bold text-purple-300"
-                                            }, '$' + (artwork.price / 100).toFixed(2)),
-                                            
-                                            React.createElement('button', {
-                                                onClick: () => addToCart(artwork),
-                                                disabled: !artwork.unlocked,
-                                                className: \`px-4 py-2 rounded hebrew \${
-                                                    artwork.unlocked 
-                                                        ? 'bg-purple-600 hover:bg-purple-700 text-white'
-                                                        : 'bg-gray-600 text-gray-300 cursor-not-allowed'
-                                                }\`
-                                            }, artwork.unlocked ? "הוסף לעגלה" : "נעול")
-                                        ),
-                                        
-                                        React.createElement('div', {
-                                            className: "flex justify-between text-white/50 text-sm"
-                                        },
-                                            React.createElement('span', null, '👁 ' + artwork.views),
-                                            React.createElement('span', null, '❤️ ' + artwork.likes),
-                                            React.createElement('span', {
-                                                className: "hebrew"
-                                            }, artwork.pathway)
-                                        )
-                                    )
-                                )
-                            )
-                        )
-                    ),
-
-                    // Cart Modal (same structure but with Hebrew)
-                    showCheckout && React.createElement('div', {
-                        className: "fixed inset-0 bg-black/50 flex items-center justify-center z-50",
-                        dir: "rtl"
-                    },
-                        React.createElement('div', {
-                            className: "bg-white rounded-lg p-6 max-w-md w-full mx-4 max-h-96 overflow-y-auto"
-                        },
-                            React.createElement('h3', {
-                                className: "text-xl font-bold mb-4 hebrew"
-                            }, "🛒 העגלה המאובטחת שלך"),
-                            
-                            cart.length === 0 ? 
-                                React.createElement('p', {
-                                    className: "text-gray-500 mb-4 hebrew"
-                                }, "העגלה שלך ריקה") :
-                                cart.map(item => 
-                                    React.createElement('div', {
-                                        key: item.cart_id,
-                                        className: "flex justify-between items-center mb-2 p-2 border-b"
-                                    },
-                                        React.createElement('div', null,
-                                            React.createElement('div', {
-                                                className: "font-medium hebrew"
-                                            }, item.gate_name_hebrew),
-                                            React.createElement('div', {
-                                                className: "text-sm text-gray-500"
-                                            }, item.title),
-                                            React.createElement('div', {
-                                                className: "text-sm text-gray-500"
-                                            }, 'מאת ' + item.artist)
-                                        ),
-                                        React.createElement('div', {
-                                            className: "flex items-center space-x-2 space-x-reverse"
-                                        },
-                                            React.createElement('span', {
-                                                className: "font-bold"
-                                            }, '$' + (item.price / 100).toFixed(2)),
-                                            React.createElement('button', {
-                                                onClick: () => removeFromCart(item.cart_id),
-                                                className: "text-red-500 hover:text-red-700"
-                                            }, "❌")
-                                        )
-                                    )
-                                ),
-                            
-                            cart.length > 0 && React.createElement('div', {
-                                className: "border-t pt-2 font-bold hebrew"
-                            }, 'סה"כ: $' + (cart.reduce((sum, item) => sum + item.price, 0) / 100).toFixed(2)),
-                            
-                            React.createElement('div', {
-                                className: "flex space-x-4 space-x-reverse mt-4"
-                            },
-                                cart.length > 0 && React.createElement('button', {
-                                    onClick: processPayment,
-                                    disabled: loading,
-                                    className: "flex-1 bg-green-600 hover:bg-green-700 disabled:bg-green-800 text-white py-2 rounded hebrew"
-                                }, loading ? 'מעבד...' : "💳 שלם עם Stripe"),
-                                
-                                React.createElement('button', {
-                                    onClick: () => setShowCheckout(false),
-                                    className: "flex-1 bg-gray-600 hover:bg-gray-700 text-white py-2 rounded hebrew"
-                                }, "סגור")
-                            )
-                        )
-                    ),
-
-                    // Orders Modal
-                    showOrders && React.createElement('div', {
-                        className: "fixed inset-0 bg-black/50 flex items-center justify-center z-50",
-                        dir: "rtl"
-                    },
-                        React.createElement('div', {
-                            className: "bg-white rounded-lg p-6 max-w-lg w-full mx-4 max-h-96 overflow-y-auto"
-                        },
-                            React.createElement('h3', {
-                                className: "text-xl font-bold mb-4 hebrew"
-                            }, "📦 ההזמנות שלך"),
-                            
-                            orders.length === 0 ? 
-                                React.createElement('p', {
-                                    className: "text-gray-500 mb-4 hebrew"
-                                }, "אין הזמנות עדיין") :
-                                orders.map(order => 
-                                    React.createElement('div', {
-                                        key: order.id,
-                                        className: "border-b pb-2 mb-2"
-                                    },
-                                        React.createElement('div', {
-                                            className: "flex justify-between"
-                                        },
-                                            React.createElement('span', {
-                                                className: "font-medium hebrew"
-                                            }, 'הזמנה #' + order.id),
-                                            React.createElement('span', {
-                                                className: "text-green-600 font-bold"
-                                            }, order.status.toUpperCase())
-                                        ),
-                                        React.createElement('div', {
-                                            className: "text-sm text-gray-600 hebrew"
-                                        }, '$' + (order.total_amount / 100).toFixed(2) + ' • ' + new Date(order.created_at).toLocaleDateString('he-IL')),
-                                        order.spiritual_insights && React.createElement('div', {
-                                            className: "text-sm text-purple-600 hebrew mt-1"
-                                        }, order.spiritual_insights)
-                                    )
-                                ),
-                            
-                            React.createElement('button', {
-                                onClick: () => setShowOrders(false),
-                                className: "w-full bg-gray-600 hover:bg-gray-700 text-white py-2 rounded mt-4 hebrew"
-                            }, "סגור")
-                        )
-                    ),
-
-                    // Spiritual Journey Modal
-                    showJourney && React.createElement('div', {
-                        className: "fixed inset-0 bg-black/50 flex items-center justify-center z-50",
-                        dir: "rtl"
-                    },
-                        React.createElement('div', {
-                            className: "bg-white rounded-lg p-6 max-w-lg w-full mx-4 max-h-96 overflow-y-auto"
-                        },
-                            React.createElement('h3', {
-                                className: "text-xl font-bold mb-4 hebrew"
-                            }, "🌟 המסע הרוחני שלך"),
-                            
-                            spiritualJourney.length === 0 ? 
-                                React.createElement('p', {
-                                    className: "text-gray-500 mb-4 hebrew"
-                                }, "המסע עדיין לא התחיל") :
-                                spiritualJourney.map(journey => 
-                                    React.createElement('div', {
-                                        key: journey.gate_number,
-                                        className: "border-b pb-2 mb-2"
-                                    },
-                                        React.createElement('div', {
-                                            className: "flex justify-between items-center"
-                                        },
-                                            React.createElement('div', null,
-                                                React.createElement('span', {
-                                                    className: "font-medium hebrew"
-                                                }, \`שער \${journey.gate_number} - \${journey.gate_name_hebrew}\`),
-                                                React.createElement('div', {
-                                                    className: "text-sm text-gray-600"
-                                                }, journey.title)
-                                            ),
-                                            React.createElement('span', {
-                                                className: "text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded hebrew"
-                                            }, journey.mastery_level)
-                                        ),
-                                        React.createElement('div', {
-                                            className: "text-sm text-gray-500"
-                                        }, 'נפתח: ' + new Date(journey.unlocked_at).toLocaleDateString('he-IL'))
-                                    )
-                                ),
-                            
-                            React.createElement('button', {
-                                onClick: () => setShowJourney(false),
-                                className: "w-full bg-gray-600 hover:bg-gray-700 text-white py-2 rounded mt-4 hebrew"
-                            }, "סגור")
-                        )
-                    )
-                );
-            }
-
-            ReactDOM.render(React.createElement(App), document.getElementById('root'));
-        </script>
-    </body>
-    </html>
-  `);
-});
+// Static files served from /public folder
+// Health endpoint remains for API clients
 
 // Initialize database and start server
 initDatabase().then(() => {
