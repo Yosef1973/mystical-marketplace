@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>פרטי מוצר · יוסף חלפה</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Frank+Ruhl+Libre:wght@400;500;700&family=IBM+Plex+Sans+Hebrew:wght@400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+    <header>
+        <a class="logo" href="/">
+            <span class="w">פלא</span>
+            <div class="mk"></div>
+            <span class="en">YOSEF KHALFA</span>
+        </a>
+        <nav>
+            <a href="/">גלריה</a>
+            <a href="/cart.html">סל (<span id="cart-count">0</span>)</a>
+        </nav>
+    </header>
+
+    <main class="product-detail">
+        <div id="product-container">
+            <!-- Product will be loaded here -->
+        </div>
+    </main>
+
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const productId = urlParams.get('id');
+        const token = localStorage.getItem('token');
+        
+        let selectedLicense = 'personal';
+        let currentProduct = null;
+        
+        async function loadProduct() {
+            if (!productId) {
+                document.getElementById('product-container').innerHTML = '<p class="text-center">מוצר לא נמצא</p>';
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/artworks/${productId}`);
+                const product = await response.json();
+                currentProduct = product;
+                
+                const sealLetter = product.category === 'עץ הדעת' ? 'פ' : 
+                                 product.category === 'עץ החיים' ? 'ש' : 'ג';
+                const collectionName = product.category === 'עץ הדעת' ? 'PELEH' :
+                                      product.category === 'עץ החיים' ? 'שני עצים בלב' : 'גן המבוכה';
+                
+                // Mock format and resolution (since they're not in the data yet)
+                const format = 'PNG מקצועי';
+                const resolution = '4096×4096 פיקסלים · 300 DPI';
+                
+                document.getElementById('product-container').innerHTML = `
+                    <div class="product-layout">
+                        <div class="product-image">
+                            <img src="${product.image}" alt="${product.title}">
+                        </div>
+                        <div class="product-info">
+                            <div class="collection">
+                                <span class="seal">${sealLetter}</span>
+                                ${collectionName}
+                            </div>
+                            <h1>${product.title}</h1>
+                            <p class="desc">${product.description}</p>
+                            
+                            <dl class="product-specs">
+                                <dt>פורמט</dt>
+                                <dd>${format}</dd>
+                                <dt>רזולוציה</dt>
+                                <dd>${resolution}</dd>
+                                <dt>אמן</dt>
+                                <dd>${product.artist}</dd>
+                            </dl>
+                            
+                            <div class="license-selector">
+                                <h3>בחר רישיון</h3>
+                                <div class="license-options">
+                                    <div class="license-option">
+                                        <input type="radio" name="license" id="license-personal" value="personal" checked>
+                                        <label for="license-personal">
+                                            <h4>שימוש אישי</h4>
+                                            <div class="price">$${(product.price / 100).toFixed(0)}</div>
+                                            <p class="features">לשימוש אישי בלבד · אין שימוש מסחרי</p>
+                                        </label>
+                                    </div>
+                                    <div class="license-option">
+                                        <input type="radio" name="license" id="license-commercial" value="commercial">
+                                        <label for="license-commercial">
+                                            <h4>שימוש מסחרי</h4>
+                                            <div class="price">$${(product.price * 3 / 100).toFixed(0)}</div>
+                                            <p class="features">שימוש מסחרי מלא · ללא הגבלה</p>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <button class="btn-primary" style="width: 100%; padding: 13px 21px; font-size: 18px;" onclick="addToCart()">
+                                הוסף לסל
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="notice">
+                        המחירים לדוגמה בלבד · המוצרים הם הדמיות קונספט
+                    </div>
+                `;
+                
+                // Update license selection handler
+                document.querySelectorAll('input[name="license"]').forEach(input => {
+                    input.addEventListener('change', (e) => {
+                        selectedLicense = e.target.value;
+                    });
+                });
+                
+            } catch (error) {
+                console.error('Failed to load product:', error);
+                document.getElementById('product-container').innerHTML = '<p class="text-center">שגיאה בטעינת המוצר</p>';
+            }
+        }
+        
+        async function addToCart() {
+            if (!token) {
+                alert('אנא התחבר כדי להוסיף פריטים לסל');
+                window.location.href = '/?auth=login';
+                return;
+            }
+            
+            try {
+                await fetch('/api/cart', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        artworkId: currentProduct.id,
+                        licenseType: selectedLicense
+                    })
+                });
+                
+                alert('המוצר נוסף לסל!');
+                updateCartCount();
+            } catch (error) {
+                alert('שגיאה בהוספה לסל: ' + error.message);
+            }
+        }
+        
+        async function updateCartCount() {
+            if (!token) return;
+            
+            try {
+                const response = await fetch('/api/cart', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                const cart = await response.json();
+                document.getElementById('cart-count').textContent = cart.length;
+            } catch (error) {
+                console.error('Failed to update cart count:', error);
+            }
+        }
+        
+        // Initialize
+        loadProduct();
+        updateCartCount();
+    </script>
+</body>
+</html>

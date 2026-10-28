@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>תשלום · יוסף חלפה</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Frank+Ruhl+Libre:wght@400;500;700&family=IBM+Plex+Sans+Hebrew:wght@400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+    <header>
+        <a class="logo" href="/">
+            <span class="w">פלא</span>
+            <div class="mk"></div>
+            <span class="en">YOSEF KHALFA</span>
+        </a>
+        <nav>
+            <a href="/">גלריה</a>
+            <a href="/cart.html">סל</a>
+        </nav>
+    </header>
+
+    <main>
+        <div class="hero">
+            <h1>השלמת הזמנה</h1>
+        </div>
+        
+        <div class="checkout-steps">
+            <div class="checkout-step active" data-step="1">
+                <div class="checkout-step-number">1</div>
+                <div class="checkout-step-label">פרטים</div>
+            </div>
+            <div class="checkout-step" data-step="2">
+                <div class="checkout-step-number">2</div>
+                <div class="checkout-step-label">סיכום</div>
+            </div>
+            <div class="checkout-step" data-step="3">
+                <div class="checkout-step-number">3</div>
+                <div class="checkout-step-label">תשלום</div>
+            </div>
+        </div>
+        
+        <!-- Step 1: Contact -->
+        <div id="step-1" class="checkout-form">
+            <h2 class="mb-21">פרטי התקשרות</h2>
+            <form id="contact-form">
+                <div class="form-group">
+                    <label>שם מלא</label>
+                    <input type="text" id="contact-name" required>
+                </div>
+                <div class="form-group">
+                    <label>אימייל</label>
+                    <input type="email" id="contact-email" required>
+                </div>
+                <div class="form-actions">
+                    <a href="/cart.html" class="btn-secondary">חזור לסל</a>
+                    <button type="submit" class="btn-primary">המשך</button>
+                </div>
+            </form>
+        </div>
+        
+        <!-- Step 2: Summary -->
+        <div id="step-2" class="checkout-form hidden">
+            <h2 class="mb-21">סיכום הזמנה</h2>
+            <div id="order-summary" class="mb-21">
+                <!-- Summary will be loaded here -->
+            </div>
+            <div class="form-actions">
+                <button class="btn-secondary" onclick="goToStep(1)">חזור</button>
+                <button class="btn-primary" onclick="goToStep(3)">המשך לתשלום</button>
+            </div>
+        </div>
+        
+        <!-- Step 3: Payment -->
+        <div id="step-3" class="checkout-form hidden">
+            <h2 class="mb-21">תשלום (דמה)</h2>
+            <div class="notice mb-21">
+                זהו ספק תשלום דמה לצורך הדגמה בלבד. לא יתבצע חיוב אמיתי.
+            </div>
+            <form id="payment-form">
+                <div class="form-group">
+                    <label>מספר כרטיס אשראי (דמה)</label>
+                    <input type="text" id="card-number" placeholder="4242 4242 4242 4242" required>
+                </div>
+                <div class="form-group">
+                    <label>תוקף</label>
+                    <input type="text" id="card-expiry" placeholder="MM/YY" required>
+                </div>
+                <div class="form-group">
+                    <label>CVV</label>
+                    <input type="text" id="card-cvv" placeholder="123" required>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn-secondary" onclick="goToStep(2)">חזור</button>
+                    <button type="submit" class="btn-primary" id="pay-btn">שלם (דמה)</button>
+                </div>
+            </form>
+        </div>
+        
+        <!-- Success message -->
+        <div id="success-message" class="checkout-form hidden">
+            <h2 class="mb-21 text-center">✓ ההזמנה הושלמה בהצלחה!</h2>
+            <div class="notice mb-21">
+                זוהי הדגמה בלבד. במערכת אמיתית, הקבצים יהיו זמינים להורדה עם קישורים חתומים בתוקף של 7 ימים.
+            </div>
+            <div id="download-links" class="mb-34">
+                <!-- Download links will appear here -->
+            </div>
+            <div class="text-center">
+                <a href="/" class="btn-primary">חזור לגלריה</a>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const token = localStorage.getItem('token');
+        let cart = [];
+        let contactInfo = {};
+        let currentStep = 1;
+        
+        async function loadCart() {
+            if (!token) {
+                alert('אנא התחבר תחילה');
+                window.location.href = '/';
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/cart', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                cart = await response.json();
+                
+                if (cart.length === 0) {
+                    alert('הסל ריק');
+                    window.location.href = '/cart.html';
+                    return;
+                }
+                
+                // Pre-fill contact info if user is logged in
+                const userResponse = await fetch('/api/health'); // This is a hack, in real app we'd have a /api/me endpoint
+                // For now, we'll leave fields empty
+                
+            } catch (error) {
+                console.error('Failed to load cart:', error);
+                alert('שגיאה בטעינת הסל');
+                window.location.href = '/cart.html';
+            }
+        }
+        
+        function goToStep(step) {
+            currentStep = step;
+            
+            // Hide all steps
+            for (let i = 1; i <= 3; i++) {
+                document.getElementById(`step-${i}`).classList.add('hidden');
+                const stepEl = document.querySelector(`.checkout-step[data-step="${i}"]`);
+                stepEl.classList.remove('active');
+            }
+            
+            // Show current step
+            document.getElementById(`step-${step}`).classList.remove('hidden');
+            const stepEl = document.querySelector(`.checkout-step[data-step="${step}"]`);
+            stepEl.classList.add('active');
+            
+            // If going to step 2, render summary
+            if (step === 2) {
+                renderSummary();
+            }
+        }
+        
+        function renderSummary() {
+            const total = cart.reduce((sum, item) => {
+                const price = item.license_type === 'commercial' ? item.price * 3 : item.price;
+                return sum + price;
+            }, 0);
+            
+            document.getElementById('order-summary').innerHTML = `
+                <div class="cart-summary">
+                    <h3 class="mb-13">פרטי הקשר</h3>
+                    <p class="mb-21">${contactInfo.name}<br>${contactInfo.email}</p>
+                    
+                    <h3 class="mb-13">פריטים בהזמנה</h3>
+                    ${cart.map(item => {
+                        const price = item.license_type === 'commercial' ? item.price * 3 : item.price;
+                        const licenseLabel = item.license_type === 'personal' ? 'רישיון אישי' : 'רישיון מסחרי';
+                        return `
+                            <div class="cart-summary-line">
+                                <span>${item.title} (${licenseLabel})</span>
+                                <span>$${(price / 100).toFixed(0)}</span>
+                            </div>
+                        `;
+                    }).join('')}
+                    
+                    <div class="cart-summary-total">
+                        <span>סה״כ</span>
+                        <span>$${(total / 100).toFixed(0)}</span>
+                    </div>
+                </div>
+            `;
+        }
+        
+        // Handle contact form
+        document.getElementById('contact-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            contactInfo = {
+                name: document.getElementById('contact-name').value,
+                email: document.getElementById('contact-email').value
+            };
+            goToStep(2);
+        });
+        
+        // Handle payment form
+        document.getElementById('payment-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const payBtn = document.getElementById('pay-btn');
+            payBtn.disabled = true;
+            payBtn.textContent = 'מעבד תשלום...';
+            
+            // Simulate payment processing
+            setTimeout(async () => {
+                try {
+                    // In a real app, this would call the payment API
+                    // For now, we just clear the cart and show success
+                    
+                    // Clear cart
+                    for (const item of cart) {
+                        await fetch(`/api/cart/${item.cart_id}`, {
+                            method: 'DELETE',
+                            headers: {
+                                'Authorization': `Bearer ${token}`
+                            }
+                        });
+                    }
+                    
+                    // Show success
+                    document.getElementById('step-3').classList.add('hidden');
+                    document.querySelector('.checkout-step[data-step="3"]').classList.remove('active');
+                    
+                    // Render download links
+                    document.getElementById('download-links').innerHTML = `
+                        <div class="cart-summary">
+                            <h3 class="mb-13">הקבצים שלך מוכנים להורדה</h3>
+                            ${cart.map(item => `
+                                <div class="cart-summary-line">
+                                    <span>${item.title}</span>
+                                    <a href="#" class="btn-secondary" onclick="alert('במערכת אמיתית, זה יוריד את הקובץ'); return false;">הורד</a>
+                                </div>
+                            `).join('')}
+                        </div>
+                    `;
+                    
+                    document.getElementById('success-message').classList.remove('hidden');
+                    
+                } catch (error) {
+                    alert('שגיאה בתשלום: ' + error.message);
+                    payBtn.disabled = false;
+                    payBtn.textContent = 'שלם (דמה)';
+                }
+            }, 2000);
+        });
+        
+        // Initialize
+        loadCart();
+    </script>
+</body>
+</html>
